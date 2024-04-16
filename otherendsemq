@@ -1,0 +1,89 @@
+#include "ns3/core-module.h"
+#include "ns3/network-module.h"
+#include "ns3/internet-module.h"
+#include "ns3/mobility-module.h"
+#include "ns3/applications-module.h"
+
+using namespace ns3;
+
+int main (int argc, char *argv[])
+{
+    // Create nodes
+    NodeContainer nodes;
+    nodes.Create(12);
+
+    // Set up mobility for nodes 2, 3, and 6
+    MobilityHelper mobility;
+    Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator>();
+    positionAlloc->Add(Vector(100, 100, 0)); // Node 2
+    positionAlloc->Add(Vector(200, 200, 0)); // Node 3
+    positionAlloc->Add(Vector(300, 300, 0)); // Node 6
+    mobility.SetPositionAllocator(positionAlloc);
+    mobility.SetMobilityModel("ns3::ConstantVelocityMobilityModel");
+    mobility.Install(nodes.Get(2));
+    mobility.Install(nodes.Get(3));
+    mobility.Install(nodes.Get(6));
+
+    // Set velocity for nodes 2, 3, and 6 to displace 50 steps away from the original point at 20 km/hr
+    double speedKmPerHr = 20.0;
+    double speedMPerSec = speedKmPerHr * 1000.0 / 3600.0;
+    Vector velocity(speedMPerSec, 0.0, 0.0); // Moving along the x-axis
+    Ptr<ConstantVelocityMobilityModel> cvmm2 = nodes.Get(2)->GetObject<ConstantVelocityMobilityModel>();
+    Ptr<ConstantVelocityMobilityModel> cvmm3 = nodes.Get(3)->GetObject<ConstantVelocityMobilityModel>();
+    Ptr<ConstantVelocityMobilityModel> cvmm6 = nodes.Get(6)->GetObject<ConstantVelocityMobilityModel>();
+    cvmm2->SetVelocity(velocity);
+    cvmm3->SetVelocity(velocity);
+    cvmm6->SetVelocity(velocity);
+
+    // Node 9 communicates with node 1 using TCP from 1st to 5th second
+    Ptr<Node> n9 = nodes.Get(9);
+    Ptr<Node> n1 = nodes.Get(1);
+    uint16_t port = 9;
+    Address sinkAddress(InetSocketAddress(n1->GetObject<Ipv4>()->GetAddress(1, 0).GetLocal(), port));
+    PacketSinkHelper sinkHelper("ns3::TcpSocketFactory", InetSocketAddress(Ipv4Address::GetAny(), port));
+    ApplicationContainer sinkApp = sinkHelper.Install(n1);
+    sinkApp.Start(Seconds(0.0));
+    sinkApp.Stop(Seconds(20.0));
+    OnOffHelper onoffHelper("ns3::TcpSocketFactory", sinkAddress);
+    onoffHelper.SetAttribute("PacketSize", UintegerValue(1024));
+    onoffHelper.SetAttribute("DataRate", StringValue("100Mbps"));
+    onoffHelper.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1]"));
+    onoffHelper.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=0]"));
+    ApplicationContainer onoffApp = onoffHelper.Install(n9);
+    onoffApp.Start(Seconds(1.0));
+    onoffApp.Stop(Seconds(5.0));
+
+    // Node 11 communicates with node 5 using UDP from 6th to 15th second
+    Ptr<Node> n11 = nodes.Get(11);
+    Ptr<Node> n5 = nodes.Get(5);
+    port = 10;
+    sinkAddress = InetSocketAddress(n5->GetObject<Ipv4>()->GetAddress(1, 0).GetLocal(), port);
+    sinkHelper = PacketSinkHelper("ns3::UdpSocketFactory", InetSocketAddress(Ipv4Address::GetAny(), port));
+    sinkApp = sinkHelper.Install(n5);
+    sinkApp.Start(Seconds(0.0));
+    sinkApp.Stop(Seconds(20.0));
+    UdpClientHelper udpClient(sinkAddress);
+    udpClient.SetAttribute("MaxPackets", UintegerValue(90));
+    udpClient.SetAttribute("Interval", TimeValue(MilliSeconds(50)));
+    udpClient.SetAttribute("PacketSize", UintegerValue(1024));
+    ApplicationContainer udpApp = udpClient.Install(n11);
+    udpApp.Start(Seconds(6.0));
+    udpApp.Stop(Seconds(15.0));
+
+    // Generate extra packets between nodes 8 and 10 from 8th to 10th second
+    uint32_t extraPackets = 1000;
+    Time packetInterval = MilliSeconds(10);
+    onoffHelper = OnOffHelper("ns3::UdpSocketFactory", sinkAddress);
+    onoffHelper.SetAttribute("PacketSize", UintegerValue(1024));
+    onoffHelper.SetAttribute("DataRate", StringValue("100Mbps"));
+    onoffHelper.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=0.05]"));
+    onoffHelper.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=0.05]"));
+    onoffApp = onoffHelper.Install(n8);
+    onoffApp.Start(Seconds(8.0));
+    onoffApp.Stop(Seconds(10.0));
+    Simulator::Stop(Seconds(10.0));
+    Simulator::Run();
+    Simulator::Destroy();
+
+    return 0;
+}
