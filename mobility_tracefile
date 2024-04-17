@@ -27,3 +27,26 @@ csma.EnableAsciiAll (stream);
 
 //To run awk file in command line
 awk -f Pdf.awk abc.tr
+//topology
+NodeContainer nodes(7);
+PointToPointHelper pointToPoint;
+NetDeviceContainer devices;
+
+pointToPoint.SetDeviceAttribute ("DataRate", StringValue ("5Mbps"));
+pointToPoint.SetChannelAttribute ("Delay", StringValue ("2ms"));
+
+devices.Add(pointToPoint.Install(nodes.Get(0), nodes.Get(1)));
+devices.Add(pointToPoint.Install(nodes.Get(0), nodes.Get(2)));
+devices.Add(pointToPoint.Install(nodes.Get(1), nodes.Get(3)));
+devices.Add(pointToPoint.Install(nodes.Get(2), nodes.Get(3)));
+devices.Add(pointToPoint.Install(nodes.Get(2), nodes.Get(4)));
+devices.Add(pointToPoint.Install(nodes.Get(2), nodes.Get(6)));
+devices.Add(pointToPoint.Install(nodes.Get(4), nodes.Get(6)));
+devices.Add(pointToPoint.Install(nodes.Get(5), nodes.Get(5)));
+
+//droptail
+p2p.SetQueue("ns3::DropTailQueue",
+             "MaxSize", StringValue("50p"));
+p2p.SetDeviceAttribute("DataRate", StringValue(linkDataRate));
+p2p.SetChannelAttribute("Delay", StringValue(linkDelay));
+NetDeviceContainer devn2n3 = p2p.Install(n2n3);
